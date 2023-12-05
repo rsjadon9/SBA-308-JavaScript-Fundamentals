@@ -83,78 +83,105 @@ function get_assignment(assignment_id, ag) {
             return current_assignment;
         }
     }
-    return {};
 }
 
 function getLearnerData(course, ag, submissions) {
+    try {
 
-
-    // here, we would process this data to achieve the desired result.
-
-    const learner_data = new Map();
-
-    submissions.forEach(s => {
-
-        console.log("Reading learner_id " + s.learner_id + " for assignment_id " + s.assignment_id);
-
-        const assignment_data = get_assignment(s.assignment_id, ag);
-        const learner_assignment_percent = s.submission.score / assignment_data.points_possible;
-
-        let learner_assignment = learner_data.get(s.learner_id);
-        if (learner_assignment == undefined) {
-            learner_assignment = [];
+        if (course.id != ag.course_id) {
+            throw "Course Id do not match";
         }
 
-        learner_assignment.push({
-            assignment_id: s.assignment_id,
-            percent: learner_assignment_percent,
-            sd: s.submission,
-            ad: assignment_data
-        });
+        // here, we would process this data to achieve the desired result.
 
-        console.log("Total " + learner_assignment.length + " submission so far learner_id=>" + s.learner_id);
+        const learner_data = new Map();
 
-        learner_data.set(s.learner_id, learner_assignment);
+        const todayTime = new Date();
 
-    });
+        for (let i = 0; i < submissions.length; i++) {
+            const s = submissions[i];
 
-    console.log(learner_data);
+            console.log("Reading learner_id " + s.learner_id + " for assignment_id " + s.assignment_id);
 
-    //store final output here
-    const final_output = [];
+            const assignment_data = get_assignment(s.assignment_id, ag);
+            if (assignment_data == undefined) {
+                throw "Assignment Id not found. learner_id " + s.learner_id + " for assignment_id " + s.assignment_id;
+            } else if (assignment_data.points_possible == 0) {
+                throw "points_possible is zero.Cannot divide by zero. learner_id " + s.learner_id + " for assignment_id " + s.assignment_id;
+            } else {
 
-    //loop for each learner so that I can calculate average for each learner
-    learner_data.forEach((values, key) => {
-        const output = {
-            id: key //key is learner id
+                const dueDate = Date.parse(assignment_data.due_at);
+                if (dueDate > todayTime) {
+                    console.log("Skipping because dueDate is in future. learner_id " + s.learner_id + " for assignment_id " + s.assignment_id);
+                    continue;
+                }
+                let pointsToDeduct = 0;
+                if (s.submission.submitted_at > assignment_data.due_at) {
+                    console.log("Submission is late. learner_id " + s.learner_id + " for assignment_id " + s.assignment_id);
+                    pointsToDeduct = .1 * parseInt(assignment_data.points_possible);
+                    console.log("Late submission deduction " + pointsToDeduct + ". learner_id " + s.learner_id + " for assignment_id " + s.assignment_id);
+                }
+                const scoreWithDeduction = parseInt(s.submission.score) - pointsToDeduct;
+                const learner_assignment_percent = scoreWithDeduction / parseInt(assignment_data.points_possible);
+
+                const learner_submission_data = {
+                    assignment_id: s.assignment_id,
+                    percent: learner_assignment_percent,
+                    scoreWithDeduction: scoreWithDeduction,
+                    ad: assignment_data
+                };
+
+                let learner_assignment = learner_data.get(s.learner_id);
+                if (learner_assignment == undefined) {
+                    learner_assignment = [];
+                }
+
+                learner_assignment.push(learner_submission_data);
+
+                console.log("Total " + learner_assignment.length + " submission so far learner_id=>" + s.learner_id);
+
+                learner_data.set(s.learner_id, learner_assignment);
+
+            }
         }
 
-        let total_points_possible = 0;
-        let total_score = 0;
+        //store final output here
+        const final_output = [];
 
-        //value is all submission for that learner
-        values.forEach(r => {
+        learner_data.forEach((values, leaner_id) => {
+            const output = {
+                id: leaner_id
+            }
+            let totalScore = 0;
+            let totalPointPossible = 0;
+            for (let i = 0; i < values.length; i++) {
+                const currentLearnerObj = values[i];
+                const learnerScore = currentLearnerObj.scoreWithDeduction;
+                const pointPossible = currentLearnerObj.ad.points_possible;
 
-            total_score = total_score + r.sd.score;
+                totalScore = totalScore + learnerScore;
+                totalPointPossible = totalPointPossible + pointPossible;
 
-            total_points_possible = total_points_possible + r.ad.points_possible;
+                output[currentLearnerObj.assignment_id] = currentLearnerObj.percent;
+            }
+            console.log('key=>' + leaner_id);
+            console.log('totalScore=>' + totalScore + " totalPointPossible=>" + totalPointPossible);
+            const avg = totalScore / totalPointPossible;
 
-            output[r.assignment_id] = r.percent;
+            //I found total score and total point which will help calculate average
+            output.avg = avg;
+
+            console.log(avg);
+            final_output.push(output);
 
         });
 
-        //I found total score and total point which will help calculate average
-        output.avg = total_score / total_points_possible;
+        return final_output;
 
-        console.log("learner_id=>" + key + " has avg " + output.avg + " and total_Score " + total_score + " and total_points_possible " + total_points_possible);
-
-        //store record for this learner
-        final_output.push(output);
-
-    });
-
-    return final_output;
-
+    } catch (error) {
+        console.log("Cannot produce result due to errors !");
+        console.log(error);
+    }
 }
 
 const result = getLearnerData(CourseInfo, AssignmentGroup, LearnerSubmissions);
