@@ -13,9 +13,7 @@ This JavaScript module processes learner submissions for assignments in a course
 4. [Installation](#installation)
 5. [Usage](#usage)
 6. [Code Structure](#code-structure)
-7. [Examples](#examples)
-8. [Contributing](#contributing)
-9. [License](#license)
+
 
 ## Introduction 
 
